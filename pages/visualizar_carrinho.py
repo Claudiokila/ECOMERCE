@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import requests 
 
 # CSS para aplicar o background personalizado e cor fixa no botão
 st.markdown(
@@ -38,6 +39,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Função para gerar o link de redirecionamento para Instagram
+def redirecionar_para_instagram(dados_compra):
+    # Mensagem que será enviada
+    mensagem = f"Compra finalizada! Detalhes: {dados_compra}"
+    # Codificar a mensagem para ser usada na URL
+    mensagem_codificada = requests.utils.quote(mensagem)
+    # Link do perfil da farmácia no Instagram
+    url_instagram = f"https://www.instagram.com/direct/new/?text={mensagem_codificada}&username=farmacialadecasa_"
+    return url_instagram
+
 # Função para visualizar o carrinho
 def visualizar_carrinho():
     if 'carrinho' not in st.session_state:
@@ -61,7 +72,7 @@ def visualizar_carrinho():
                 """,
                 unsafe_allow_html=True
             )
-            
+
             if st.button(f"Remover {item['produto']} do carrinho", key=f"remover_{item['id']}"):
                 st.session_state['carrinho'] = [i for i in st.session_state['carrinho'] if i['id'] != item['id']]
                 st.success("Item removido do carrinho.")
@@ -105,6 +116,27 @@ def visualizar_carrinho():
                 elif len(cep) != 8:
                     st.warning("O CEP deve ter 8 dígitos.")
                 else:
+                    # Montar o relatório da compra
+                    dados_compra = {
+                        "nome_usuario": nome_usuario,
+                        "endereco": {
+                            "rua": rua,
+                            "numero": numero,
+                            "complemento": complemento,
+                            "cep": cep
+                        },
+                        "telefone": telefone,
+                        "entrega": entrega,
+                        "pagamento": pagamento,
+                        "total": total,
+                        "itens": st.session_state['carrinho']
+                    }
+
+                    # Redirecionar para Instagram
+                    link_instagram = redirecionar_para_instagram(dados_compra)
+                    st.markdown(f"[Clique aqui para finalizar sua compra e enviar uma mensagem no Instagram]({link_instagram})", unsafe_allow_html=True)
+
+                    # Limpar o carrinho
                     st.session_state['carrinho'] = []
                     st.success("Compra finalizada com sucesso! Seu carrinho foi esvaziado.")
 
@@ -119,6 +151,27 @@ def visualizar_carrinho():
 
             # Botão para finalizar a compra
             if st.button("Finalizar compra"):
+                # Montar o relatório da compra
+                dados_compra = {
+                    "nome_usuario": "Cliente Retirada na Loja",
+                    "endereco": {
+                        "rua": "Retirada na loja",
+                        "numero": "",
+                        "complemento": "",
+                        "cep": ""
+                    },
+                    "telefone": "",
+                    "entrega": entrega,
+                    "pagamento": pagamento,
+                    "total": total,
+                    "itens": st.session_state['carrinho']
+                }
+
+                # Redirecionar para Instagram
+                link_instagram = redirecionar_para_instagram(dados_compra)
+                st.markdown(f"[Clique aqui para finalizar sua compra e enviar uma mensagem no Instagram]({link_instagram})", unsafe_allow_html=True)
+
+                # Limpar o carrinho
                 st.session_state['carrinho'] = []
                 st.success("Compra finalizada com sucesso! Seu carrinho foi esvaziado.")
 
