@@ -1,15 +1,18 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image, ImageDraw, ImageOps
-from crud import adicionar_produto, carregar_produtos, atualizar_produto, deletar_produto
+from io import BytesIO
+import base64
+from crud import carregar_produtos
 
 st.set_page_config(layout="wide")
 
-
-def redimensionar_imagem(caminho_imagem, largura_padrao=400, altura_padrao=400):
+# Função para redimensionar a imagem
+def redimensionar_imagem(caminho_imagem, largura_padrao=200, altura_padrao=200):
     imagem = Image.open(caminho_imagem)
     return imagem.resize((largura_padrao, altura_padrao))
 
+# Função para adicionar bordas arredondadas à imagem
 def bordas_arredondadas(imagem, porcentagem_raio=25):
     largura, altura = imagem.size
     raio = int(min(largura, altura) * porcentagem_raio / 100)
@@ -20,85 +23,174 @@ def bordas_arredondadas(imagem, porcentagem_raio=25):
     imagem_arredondada.putalpha(mask)
     return imagem_arredondada
 
-def loja_virtual():
-    st.markdown("""<style>
-        .main { background-color: #1A3680; }
-        header { background-color: #E50320; padding: 15px; border-radius: 10px; }
-        h1 { color: white; text-align: center; font-size: 3em; }
-        .item-carrinho { background-color: #789899; color: white; padding: 15px; margin-bottom: 10px; }
-    </style>""", unsafe_allow_html=True)
+# Função para converter imagem para base64
+def imagem_para_base64(imagem):
+    buffer = BytesIO()
+    imagem.save(buffer, format="PNG")
+    img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return img_str
 
+# Função principal da loja virtual
+def loja_virtual():
+    # Estilos personalizados com CSS para o Streamlit
+    st.markdown("""
+    <style>
+        .stTextInput, .stButton { 
+            width: 50%; 
+            margin: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: white;
+            border: 2px solid #42A5F5;
+            border-radius: 25px;
+            padding: 5px 10px;
+            font-size: 16px;
+        }
+        .stButton button {
+            background-color: #42A5F5;
+            color: white;
+            border-radius: 25px;
+            padding: 10px 20px;
+        }
+        header { 
+            background-color: #1E88E5; 
+            padding: 15px; 
+            border-radius: 10px; 
+        }
+        h1 { 
+            color: white; 
+            text-align: center; 
+            font-size: 3em; 
+        }
+        .card {
+            background-color: #E3F2FD;
+            border: 2px solid #42A5F5;
+            border-radius: 15px;
+            padding: 15px;
+            margin: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 600px; /* Altura do card ajustada para 600px */
+            width: 400px; /* Largura do card ajustada */
+        }
+        .card img {
+            margin-bottom: 15px;
+            border-radius: 15px;
+            max-width: 100%; /* Garantir que a imagem não ultrapasse a largura do card */
+        }
+        .card h3 {
+            color: #1E88E5;
+            margin: 5px 0;
+        }
+        .card p {
+            color: #555;
+            margin: 5px 0;
+        }
+        .add-button {
+            background-color: #42A5F5;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 10px 20px;
+            cursor: pointer;
+            text-align: center;
+            width: 100px; /* Largura do botão ajustada para 100px */
+            margin-top: auto; /* Para empurrar o botão para o final do card */
+        }
+        .success-message {
+            color: green;
+            margin-top: 10px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Cabeçalho
     st.markdown("<header><h1>FARMÁCIA LÁ DE CASA</h1></header>", unsafe_allow_html=True)
 
     produtos = carregar_produtos()
 
-    filtro = st.text_input("Buscar produto", key="filtro")
-    if filtro:
+    # Filtro de busca
+    filtro = st.text_input("", placeholder="Digite o nome do produto")
+
+    if st.button("Buscar") and filtro:
         produtos = produtos[produtos['PRODUTO'].str.contains(filtro, case=False)]
 
+    # Inicialização do carrinho
     if 'carrinho' not in st.session_state:
         st.session_state['carrinho'] = []
-    
+
+    # Inicializa a paginação
     if 'pagina' not in st.session_state:
         st.session_state['pagina'] = 0
-    
-    produtos_por_pagina = 10  # Defina quantos produtos você quer mostrar por página
-    total_paginas = (len(produtos) + produtos_por_pagina - 1) // produtos_por_pagina
 
-    
-
-    # Exibição dos produtos da página atual
+    # Número de produtos por página e controle de paginação
+    produtos_por_pagina = 24  # 8 linhas * 3 colunas
     inicio = st.session_state['pagina'] * produtos_por_pagina
-    fim = min(inicio + produtos_por_pagina, len(produtos))
-    produtos_a_exibir = produtos.iloc[inicio:fim]
+    fim = inicio + produtos_por_pagina
 
-    def adicionar_ao_carrinho(produto, quantidade):
-        item_carrinho = {
-            "produto": produto['PRODUTO'],
-            "preco": produto['PRECO_VENDA'],
-            "quantidade": quantidade,
-            "id": produto['CODIGO']
-        }
-        st.session_state['carrinho'].append(item_carrinho)
+    # Exibindo os produtos em colunas
+    num_colunas = 3  # Definindo 3 colunas
+    cols = st.columns(num_colunas)  # Criando as colunas
 
-    for index, produto in produtos_a_exibir.iterrows():
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            caminho_imagem = f"imagens/salveo.jpg" # Atualize conforme necessário
-            imagem_redimensionada = redimensionar_imagem(caminho_imagem)
-            imagem_com_bordas = bordas_arredondadas(imagem_redimensionada)
-            st.image(imagem_com_bordas)
+    # Controlar a linha atual
+    for index in range(inicio, min(fim, len(produtos))):
+        produto = produtos.iloc[index]  # Extrai o produto da tupla
+        caminho_imagem = "imagens/salveo.jpg"  # Caminho da imagem do produto
+        imagem_redimensionada = redimensionar_imagem(caminho_imagem)
+        imagem_com_bordas = bordas_arredondadas(imagem_redimensionada)
+        imagem_base64 = imagem_para_base64(imagem_com_bordas)
 
-        with col2:
-            st.markdown(f"<h3>{produto['PRODUTO']}</h3>", unsafe_allow_html=True)
-            st.markdown(f"<p>Preço: R$ {produto['PRECO_VENDA']}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p>Descrição: {produto['PRODUTO']}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p>Quantidade disponível: {produto['ESTOQUE']}</p>", unsafe_allow_html=True)
+        # Variável para armazenar mensagem de sucesso
+        mensagem_sucesso = ""
 
-            with st.form(key=f"form_{produto['CODIGO']}"):
-                col_qtd, col_btn = st.columns([1, 2])
-                with col_qtd:
-                    quantidade = st.number_input("Quantidade", min_value=1, max_value=produto['ESTOQUE'], step=1, label_visibility="collapsed")
-                with col_btn:
-                    if st.form_submit_button(f"Adicionar {produto['PRODUTO']} ao carrinho"):
-                        adicionar_ao_carrinho(produto, quantidade)
-                        st.success(f"{quantidade} unidade(s) de {produto['PRODUTO']} adicionada(s) ao carrinho.")
+        # Usando a coluna atual para exibir o card
+        with cols[index % num_colunas]:
+            st.markdown(f"""
+            <div class="card">
+                <img src="data:image/png;base64,{imagem_base64}" alt="Imagem do Produto" width="150">
+                <div>
+                    <h3>{produto['PRODUTO']}</h3>
+                    <p><strong>Preço:</strong> R$ {produto['PRECO_VENDA']}</p>
+                    <p><strong>Quantidade disponível:</strong> {produto['ESTOQUE']}</p>
+                </div>
+                <input type="number" name="quantidade" min="1" max="{produto['ESTOQUE']}" value="1" style="width: 100%; padding: 5px; margin-top: 10px; border-radius: 5px; border: 1px solid #ccc;" required>
+                
+            </div>
+            <p class="success-message" id="success_{index}">{mensagem_sucesso}</p>
+            """, unsafe_allow_html=True)
 
-    # Navegação entre páginas
-    if st.button("Página Anterior") and st.session_state['pagina'] > 0:
-        st.session_state['pagina'] -= 1
-    st.write(f"Página {st.session_state['pagina'] + 1} de {total_paginas}")
-    if st.button("Próxima Página") and st.session_state['pagina'] < total_paginas - 1:
-        st.session_state['pagina'] += 1
+            # Exibindo a lógica do botão "Adicionar"
+            if st.button(f"Adicionar", key=f"add_{produto['CODIGO']}"):
+                quantidade = st.session_state.get(f"quantidade_{produto['CODIGO']}", 1)
+                st.session_state['carrinho'].append({
+                    "produto": produto['PRODUTO'],
+                    "preco": produto['PRECO_VENDA'],
+                    "quantidade": quantidade,
+                    "id": produto['CODIGO']
+                })
+                mensagem_sucesso = f"{quantidade} unidade(s) de {produto['PRODUTO']} adicionada(s) ao carrinho."
 
+            # Atualiza a mensagem de sucesso no card
+            st.markdown(f"<script>document.getElementById('success_{index}').innerText = '{mensagem_sucesso}';</script>", unsafe_allow_html=True)
 
+    # Botão de navegação para a próxima página
+    if fim < len(produtos):
+        if st.button("Próximos Produtos"):
+            st.session_state['pagina'] += 1
+            st.experimental_rerun()
+
+    # Exibindo o carrinho
     if st.session_state['carrinho']:
         st.markdown("<h2>Carrinho</h2>", unsafe_allow_html=True)
         total = 0
         for item in st.session_state['carrinho']:
             subtotal = item['preco'] * item['quantidade']
             total += subtotal
-            st.markdown(f"<div class='item-carrinho'><p>{item['quantidade']}x {item['produto']} - R$ {subtotal:.2f}</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div><p>{item['quantidade']}x {item['produto']} - R$ {subtotal:.2f}</p></div>", unsafe_allow_html=True)
 
         st.markdown(f"<h3>Total: R$ {total:.2f}</h3>", unsafe_allow_html=True)
 
